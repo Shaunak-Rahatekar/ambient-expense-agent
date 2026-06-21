@@ -1,0 +1,2 @@
+EXPENSE_THRESHOLD = 100.0
+LLM_MODEL = "gemini-2.5-flash"
