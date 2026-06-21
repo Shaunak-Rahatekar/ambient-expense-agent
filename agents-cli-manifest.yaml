@@ -7,7 +7,7 @@ generated_at: "2026-06-21T11:18:16.432134+00:00"
 language: "python"
 create_params:
   deployment_target: "none"
-  session_type: "in_memory"
+  session_type: "sqlite"
   cicd_runner: "skip"
   include_data_ingestion: false
   

@@ -1,7 +1,6 @@
 import base64
 import json
 import re
-import datetime
 from typing import Any
 
 from google.adk.workflow import Workflow, node
@@ -9,53 +8,46 @@ from google.adk.agents import LlmAgent
 from google.adk.events.event import Event
 from google.adk.events.request_input import RequestInput
 from google.adk.agents.context import Context
-from google.adk.agents.callback_context import CallbackContext
-
-async def inject_current_date(ctx: CallbackContext) -> None:
-    if "current_date" not in ctx.state:
-        ctx.state["current_date"] = datetime.datetime.now().strftime("%Y-%m-%d")
 
 from .config import EXPENSE_THRESHOLD, LLM_MODEL
-from .schema import ExpenseReport, RiskAssessment, ApprovalOutcome, SecurityAssessment, ExpenseExtraction
+from .schema import ExpenseReport, RiskAssessment, ApprovalOutcome, SecurityAssessment
 
-expense_extractor = LlmAgent(
-    name="expense_extractor",
-    model=LLM_MODEL,
-    before_agent_callback=inject_current_date,
-    instruction="""You are an expense report assistant. Today's date is: {current_date}.
-Extract the expense details from the user's natural language input.
-The required fields are: amount, submitter, category, description, and date.
-If any required field is missing, set is_complete to false and provide a missing_info_message politely asking the user for exactly what is still needed.
-If all fields are present in the conversation history, set is_complete to true and provide the extracted expense object. Ensure the amount is a number.""",
-    output_schema=ExpenseExtraction
-)
-
-@node(rerun_on_resume=True)
-async def extraction_router(ctx: Context, node_input: ExpenseExtraction):
-    """Checks if extraction is complete, otherwise loops back to the user."""
-    if node_input.is_complete and node_input.expense:
-        # Extracted successfully, proceed to the main workflow
-        yield Event(output=node_input.expense, route="complete")
+@node
+def parse_event(node_input: Any) -> ExpenseReport:
+    """Parses an incoming event containing an expense report."""
+    # Extract text if it came from the Web UI chat box (Content object)
+    if hasattr(node_input, "parts") and node_input.parts:
+        data = node_input.parts[0].text
+    elif isinstance(node_input, dict):
+        data = node_input.get("data", node_input) # fallback to the whole dict if "data" is missing
     else:
-        # Loop back to ask the user for more info
-        loop_count = ctx.state.get("extraction_loop_count", 0)
-        interrupt_id = f"missing_info_{loop_count}"
+        data = node_input
+
+    if isinstance(data, str):
+        if not data.strip():
+            raise ValueError("Empty expense payload received.")
+        print(f"DEBUG DATA TO PARSE: {data!r}")
+        try:
+            # Try base64 decode (for real Pub/Sub)
+            decoded = base64.b64decode(data, validate=True).decode('utf-8')
+            parsed = json.loads(decoded)
+        except Exception as e:
+            print(f"Base64 decode failed ({e}), falling back to plain json")
+            # Fallback to plain JSON string (for local testing via UI)
+            parsed = json.loads(data)
+    elif isinstance(data, dict):
+        parsed = data
+    else:
+        raise ValueError("Invalid data format. Expected base64 string, JSON string, or dict.")
         
-        if interrupt_id not in ctx.resume_inputs:
-            yield RequestInput(interrupt_id=interrupt_id, message=node_input.missing_info_message or "Please provide the missing expense details.")
-            return
-            
-        # User replied. Increment loop counter and send their response back to the extractor
-        ctx.state["extraction_loop_count"] = loop_count + 1
-        human_response = ctx.resume_inputs[interrupt_id]
-        yield Event(output=str(human_response), route="missing")
+    return ExpenseReport(**parsed)
 
 @node
 def route_expense(node_input: ExpenseReport):
     """Routes the expense report based on the amount threshold."""
     if node_input.amount < EXPENSE_THRESHOLD:
         return Event(output=node_input, route="auto_approve")
-    return Event(output=node_input, route="llm_review")
+    return Event(output=node_input, route="risk_review")
 
 @node
 def auto_approve(node_input: ExpenseReport) -> ApprovalOutcome:
@@ -114,8 +106,7 @@ def security_router(ctx: Context, node_input: SecurityAssessment):
 risk_reviewer = LlmAgent(
     name="risk_reviewer",
     model=LLM_MODEL,
-    before_agent_callback=inject_current_date,
-    instruction="""You are an expense report risk reviewer. Today's date is: {current_date}.
+    instruction="""You are an expense report risk reviewer.
 Review the provided expense report for any anomalies or risk factors.
 If you find any, summarize them. Provide your assessment in the expected structured format.""",
     output_schema=RiskAssessment,
@@ -154,27 +145,24 @@ def record_outcome(node_input: ApprovalOutcome):
 root_agent = Workflow(
     name="expense_agent",
     edges=[
-        ('START', expense_extractor),
-        (expense_extractor, extraction_router),
-        (extraction_router, {
-            "complete": route_expense,
-            "missing": expense_extractor
-        }),
-        
-        # Route 1: Auto-approve
-        (route_expense, {"auto_approve": auto_approve, "llm_review": pii_scrubber}),
-        (auto_approve, record_outcome),
-        
-        # Route 2: Security Checkpoint -> LLM Risk Review -> Human in the loop
+        ('START', parse_event),
+        (parse_event, pii_scrubber),
         (pii_scrubber, injection_detector),
         (injection_detector, security_router),
         
         # Security routing branches
         (security_router, {
             "injected": human_review,
-            "clean": risk_reviewer
+            "clean": route_expense
         }),
         
+        # Amount routing branches
+        (route_expense, {
+            "auto_approve": auto_approve, 
+            "risk_review": risk_reviewer
+        }),
+        
+        (auto_approve, record_outcome),
         (risk_reviewer, human_review),
         (human_review, record_outcome)
     ]

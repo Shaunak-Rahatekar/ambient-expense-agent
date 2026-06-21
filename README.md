@@ -56,6 +56,18 @@ You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`
 | `agents-cli lint`    | Run code quality checks                                                               |
 | `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
 | `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
+| `make generate-traces` | Run local trace generator against the synthetic evaluation dataset |
+| `make grade` | Run LLM-as-judge scoring on the generated traces |
+
+## Architecture & Security
+
+The Ambient Expense Agent uses a secure routing architecture:
+1. **PII Scrubbing**: All incoming requests are scrubbed for SSNs and Credit Card numbers.
+2. **Prompt Injection Detection**: Uses an LLM to detect malicious prompts before they reach approval layers.
+3. **Threshold Auto-Approval**: Clean expenses under the threshold ($100) are auto-approved.
+4. **Human Review**: High-value expenses, risky expenses, or detected prompt injections are routed to human review.
+
+This flow was rigorously validated using the local evaluation suite (`tests/eval/`) with custom LLM-as-judge metrics.
 
 ## 🛠️ Project Management
 
