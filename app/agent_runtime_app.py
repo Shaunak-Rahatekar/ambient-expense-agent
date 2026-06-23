@@ -86,13 +86,6 @@ class AgentEngineApp(AdkApp):
         """Registers the operations of the Agent."""
         operations = super().register_operations()
         operations[""] = [*operations.get("", []), "register_feedback", "query"]
-        
-        # Remove unsupported async modes to prevent SDK instantiation errors
-        if "async" in operations:
-            del operations["async"]
-        if "async_stream" in operations:
-            del operations["async_stream"]
-            
         return operations
 
     def clone(self) -> "AgentEngineApp":
