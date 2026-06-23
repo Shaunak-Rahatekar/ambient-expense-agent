@@ -40,6 +40,10 @@ def parse_event(node_input: Any) -> ExpenseReport:
     else:
         raise ValueError("Invalid data format. Expected base64 string, JSON string, or dict.")
         
+    # If the payload is wrapped in a "data" key, unwrap it
+    if "data" in parsed and isinstance(parsed["data"], dict):
+        parsed = parsed["data"]
+        
     return ExpenseReport(**parsed)
 
 @node
@@ -113,7 +117,7 @@ If you find any, summarize them. Provide your assessment in the expected structu
 )
 
 @node(rerun_on_resume=True)
-async def human_review(ctx: Context, node_input: RiskAssessment):
+def human_review(ctx: Context, node_input: RiskAssessment):
     """Pauses for human approval based on the LLM's risk assessment."""
     # If we haven't received human input yet, yield a RequestInput to pause the workflow
     if not ctx.resume_inputs:
