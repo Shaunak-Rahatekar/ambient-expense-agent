@@ -57,28 +57,30 @@ class AgentEngineApp(AdkApp):
         **kwargs: Any,
     ) -> Any:
         """Robust query method that auto-handles Playground chat limitations."""
-        # Normalize inputs coming from the Playground (which sends 'input')
         resolved_message = message if message is not None else input
         resolved_user_id = user_id if user_id is not None else "playground-user"
 
-        # Check if we need to auto-resume based on a pending RequestInput
-        if session_id and resolved_message and not resume_inputs:
-            state = self.app.state_manager.get_state(session_id)
-            if state and state.pending_interrupts:
-                # We are paused! Map the raw chat text to the expected resume_inputs
-                interrupt_id = state.pending_interrupts[-1].interrupt_id
-                resume_inputs = {interrupt_id: str(resolved_message)}
-                # Clear the new message to prevent ADK from treating it as a new prompt
-                resolved_message = ""
+        # Safely auto-resume: if the input is a plain text string (not JSON), 
+        # assume it is a response to the human_approval prompt from the Playground UI.
+        if session_id and isinstance(resolved_message, str) and not resume_inputs:
+            import json
+            try:
+                json.loads(resolved_message)
+            except json.JSONDecodeError:
+                resume_inputs = {"human_approval": resolved_message}
 
-        events = list(self.stream_query(
-            message=resolved_message,
-            user_id=resolved_user_id,
-            session_id=session_id, 
-            resume_inputs=resume_inputs, 
-            **kwargs
-        ))
-        return events
+        try:
+            events = list(self.stream_query(
+                message=resolved_message,
+                user_id=resolved_user_id,
+                session_id=session_id, 
+                resume_inputs=resume_inputs, 
+                **kwargs
+            ))
+            return events
+        except Exception as e:
+            # Ensure exceptions are returned cleanly so the Playground doesn't show an empty error
+            return [{"error": str(e)}]
 
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent."""
