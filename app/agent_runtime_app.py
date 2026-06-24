@@ -84,6 +84,42 @@ class AgentEngineApp(AdkApp):
             # Ensure exceptions are returned cleanly so the Playground doesn't show an empty error
             return [{"error": str(e)}]
 
+    async def async_stream_query(
+        self,
+        *,
+        message: Any | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        resume_inputs: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ):
+        """Override async_stream_query — the method the Playground actually calls.
+        
+        Intercepts plain-text responses (like 'approve') from the Playground chat
+        and converts them into proper resume_inputs to continue a paused workflow.
+        """
+        import json
+        resolved_message = message
+        resolved_user_id = user_id if user_id is not None else "playground-user"
+
+        # If the message is plain text (not JSON), treat it as a human_approval response
+        if session_id and isinstance(resolved_message, str) and not resume_inputs:
+            try:
+                json.loads(resolved_message)
+            except json.JSONDecodeError:
+                resume_inputs = {"human_approval": resolved_message}
+                # Clear message so ADK doesn't re-run parse_event on "approve"
+                resolved_message = None
+
+        async for event in super().async_stream_query(
+            message=resolved_message,
+            user_id=resolved_user_id,
+            session_id=session_id,
+            resume_inputs=resume_inputs,
+            **kwargs
+        ):
+            yield event
+
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent."""
         operations = super().register_operations()
