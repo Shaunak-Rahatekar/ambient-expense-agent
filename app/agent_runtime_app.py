@@ -90,32 +90,61 @@ class AgentEngineApp(AdkApp):
         message: Any | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
-        resume_inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ):
         """Override async_stream_query — the method the Playground actually calls.
         
         Intercepts plain-text responses (like 'approve') from the Playground chat
-        and converts them into proper resume_inputs to continue a paused workflow.
+        and converts them into a proper FunctionResponse to resume a paused workflow.
         """
         import json
         resolved_message = message
         resolved_user_id = user_id if user_id is not None else "playground-user"
 
         # If the message is plain text (not JSON), treat it as a human_approval response
-        if session_id and isinstance(resolved_message, str) and not resume_inputs:
+        if session_id and isinstance(resolved_message, str):
             try:
                 json.loads(resolved_message)
             except json.JSONDecodeError:
-                resume_inputs = {"human_approval": resolved_message}
-                # Clear message so ADK doesn't re-run parse_event on "approve"
-                resolved_message = None
+                # Ensure runner is initialized so we can access the session service
+                if not self._tmpl_attrs.get("runner"):
+                    self.set_up()
+                
+                session_service = self._tmpl_attrs.get("session_service")
+                if session_service:
+                    session = await session_service.get_session(
+                        app_name=self._app_name,
+                        user_id=resolved_user_id,
+                        session_id=session_id,
+                    )
+                    if session and session.events:
+                        # Find the last adk_request_input function call in session events
+                        for event in reversed(session.events):
+                            if event.content and event.content.parts:
+                                for part in event.content.parts:
+                                    if (hasattr(part, "function_call") 
+                                            and part.function_call 
+                                            and part.function_call.name == "adk_request_input"):
+                                        fc_id = part.function_call.id
+                                        # Build a FunctionResponse dict — the correct ADK resume mechanism
+                                        resolved_message = {
+                                            "role": "user",
+                                            "parts": [{
+                                                "function_response": {
+                                                    "id": fc_id,
+                                                    "name": "adk_request_input",
+                                                    "response": {"output": message}
+                                                }
+                                            }]
+                                        }
+                                        break
+                            if isinstance(resolved_message, dict):
+                                break
 
         async for event in super().async_stream_query(
             message=resolved_message,
             user_id=resolved_user_id,
             session_id=session_id,
-            resume_inputs=resume_inputs,
             **kwargs
         ):
             yield event
