@@ -68,6 +68,8 @@ class AgentEngineApp(AdkApp):
                 json.loads(resolved_message)
             except json.JSONDecodeError:
                 resume_inputs = {"human_approval": resolved_message}
+                # CRITICAL: clear the message so ADK doesn't re-run parse_event on "approve"
+                resolved_message = None
 
         try:
             events = list(self.stream_query(
