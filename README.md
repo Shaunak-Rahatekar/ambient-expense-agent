@@ -1,101 +1,68 @@
 # ambient-expense-agent
 
-Simple ReAct agent
-Agent generated with `agents-cli` version `0.5.0`
+An intelligent, secure Expense Processing Agent built with the Google Agent Development Kit (ADK).
+
+## What This Agent Does
+
+The Ambient Expense Agent autonomously processes employee expense reports using a secure, multi-layered routing architecture:
+
+1. **PII Scrubbing**: Automatically detects and redacts sensitive information (like SSNs and Credit Card numbers) from incoming requests before they reach the main LLM.
+2. **Prompt Injection Detection**: Analyzes the input for malicious instructions or prompt injection attempts, isolating them for security review.
+3. **Threshold Auto-Approval**: Evaluates the expense details. If the expense is clean, valid, and under the $100 threshold, it is automatically approved.
+4. **Human-in-the-Loop (HITL) Review**: High-value expenses (>$100), policy violations, or suspicious requests are paused and routed to human review for explicit approval or rejection.
 
 ## Project Structure
 
 ```
 ambient-expense-agent/
-├── app/         # Core agent code
-│   ├── agent.py               # Main agent logic
-│   └── app_utils/             # App utilities and helpers
-├── tests/                     # Unit, integration, and load tests
-├── GEMINI.md                  # AI-assisted development guide
-└── pyproject.toml             # Project dependencies
+├── app/         # Core agent code and logic
+├── tests/       # Unit, integration, and load tests
+├── .github/     # GitHub Actions CI/CD workflows
+├── deployment/  # Terraform infrastructure as code
+└── pyproject.toml # Project dependencies
 ```
 
-> 💡 **Tip:** Use [Gemini CLI](https://github.com/google-gemini/gemini-cli) for AI-assisted development - project context is pre-configured in `GEMINI.md`.
+## How to Run Locally
 
-## Requirements
+To test the agent on your local machine with an interactive chat UI:
 
-Before you begin, ensure you have:
-- **uv**: Python package manager (used for all dependency management in this project) - [Install](https://docs.astral.sh/uv/getting-started/installation/) ([add packages](https://docs.astral.sh/uv/concepts/dependencies/) with `uv add <package>`)
-- **agents-cli**: Agents CLI - Install with `uv tool install google-agents-cli`
-- **Google Cloud SDK**: For GCP services - [Install](https://cloud.google.com/sdk/docs/install)
+1. Install dependencies:
+   ```bash
+   uv tool install google-agents-cli
+   uvx google-agents-cli setup
+   agents-cli install
+   ```
 
+2. Start the local playground:
+   ```bash
+   agents-cli playground
+   ```
 
-## Quick Start
+3. Open the provided `localhost` URL in your browser. Try submitting a clean expense under $100, and then try submitting an expense over $100 to trigger the Human Review loop!
 
-Install `agents-cli` and its skills if not already installed:
+## How to Run on Cloud
 
+The agent is deployed serverlessly to **Vertex AI Agent Runtime** (Reasoning Engine). Because the workflow involves pausing for Human-in-the-Loop, the best way to interact with the live cloud deployment is via the Google Cloud Console Playground.
+
+1. **[Open the Cloud Console Playground](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-east1/agent-engines/1395658487647698944/playground?project=ambient-expense-agent-500111)**
+2. Submit an expense payload in JSON format:
+   ```json
+   {"amount": 5000, "description": "Client dinner", "date": "2026-06-04", "submitter": "Alice", "category": "Meals"}
+   ```
+3. The cloud agent will process the request and pause, waiting for human approval.
+4. In the chat box, type `approve` (or `reject`) and hit enter to resume the workflow.
+
+## Deployment & CI/CD
+
+This project uses Terraform for infrastructure and GitHub Actions for CI/CD.
+- The `deployment/terraform/single-project` directory contains the base infrastructure (Agent Engine, BigQuery Telemetry, Cloud Storage).
+- The `.github/workflows` directory contains the CI/CD pipeline which automatically deploys the code in `app/` to the cloud upon merges to the `main` branch.
+
+To deploy manually from the CLI:
 ```bash
-uvx google-agents-cli setup
-```
-
-Install required packages:
-
-```bash
-agents-cli install
-```
-
-Test the agent with a local web server:
-
-```bash
-agents-cli playground
-```
-
-You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`.
-
-## Commands
-
-| Command              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `agents-cli install` | Install dependencies using uv                                                         |
-| `agents-cli playground` | Launch local development environment                                                  |
-| `agents-cli lint`    | Run code quality checks                                                               |
-| `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
-| `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
-| `make generate-traces` | Run local trace generator against the synthetic evaluation dataset |
-| `make grade` | Run LLM-as-judge scoring on the generated traces |
-
-## Architecture & Security
-
-The Ambient Expense Agent uses a secure routing architecture:
-1. **PII Scrubbing**: All incoming requests are scrubbed for SSNs and Credit Card numbers.
-2. **Prompt Injection Detection**: Uses an LLM to detect malicious prompts before they reach approval layers.
-3. **Threshold Auto-Approval**: Clean expenses under the threshold ($100) are auto-approved.
-4. **Human Review**: High-value expenses, risky expenses, or detected prompt injections are routed to human review.
-
-This flow was rigorously validated using the local evaluation suite (`tests/eval/`) with custom LLM-as-judge metrics.
-
-**Security Effectiveness:** 
-The agent has been evaluated against a custom dataset of malicious and non-malicious scenarios. It achieved a **100% success rate (5.0/5.0)** in both `routing_correctness` and `security_containment`, proving its ability to autonomously catch prompt injections and scrub PII while efficiently auto-approving standard requests.
-
-## 🛠️ Project Management
-
-| Command | What It Does |
-|---------|--------------|
-| `agents-cli scaffold enhance` | Add CI/CD pipelines and Terraform infrastructure |
-| `agents-cli infra cicd` | One-command setup of entire CI/CD pipeline + infrastructure |
-| `agents-cli scaffold upgrade` | Auto-upgrade to latest version while preserving customizations |
-
----
-
-## Development
-
-Edit your agent logic in `app/agent.py` and test with `agents-cli playground` - it auto-reloads on save.
-
-## Deployment
-
-```bash
-gcloud config set project <your-project-id>
 agents-cli deploy
 ```
 
-To add CI/CD and Terraform, run `agents-cli scaffold enhance`.
-To set up your production infrastructure, run `agents-cli infra cicd`.
-
 ## Observability
 
-Built-in telemetry exports to Cloud Trace, BigQuery, and Cloud Logging.
+The agent includes built-in telemetry that exports traces to Cloud Trace and logs to BigQuery (`ambient_expense_agent_telemetry` dataset) for custom analytics such as approval ratios.
