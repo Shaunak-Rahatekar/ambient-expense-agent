@@ -206,3 +206,6 @@ tools/a2a-inspector/
 # Local Dev and Evaluation
 sessions.db
 artifacts/
+scratch_test*.py
+test_local.py
+test_playground.py

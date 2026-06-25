@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Outfit', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 50px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Radial glow backgrounds */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80vw;
+            height: 400px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(13, 17, 23, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            z-index: 1;
+        }
+
+        h1 {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 2.5rem;
+            margin-bottom: 30px;
+            text-align: center;
+            text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(22, 27, 34, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card-header {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .amount {
+            color: #38bdf8;
+            font-size: 1.5rem;
+        }
+
+        .detail {
+            font-size: 0.9rem;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+
+        .detail span {
+            color: #c9d1d9;
+            font-weight: 400;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-approve {
+            background: rgba(46, 160, 67, 0.1);
+            color: #3fb950;
+            border: 1px solid rgba(46, 160, 67, 0.4);
+        }
+
+        .btn-approve:hover {
+            background: rgba(46, 160, 67, 0.2);
+            box-shadow: 0 0 15px rgba(46, 160, 67, 0.2);
+        }
+
+        .btn-reject {
+            background: rgba(248, 81, 73, 0.1);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, 0.4);
+        }
+
+        .btn-reject:hover {
+            background: rgba(248, 81, 73, 0.2);
+            box-shadow: 0 0 15px rgba(248, 81, 73, 0.2);
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: currentColor;
+            animation: spin 1s ease-in-out infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        button.loading .spinner {
+            display: inline-block;
+        }
+        button.loading span {
+            display: none;
+        }
+        button.loading {
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0; right: -400px; width: 400px; height: 100%;
+            background: #161b22;
+            border-left: 1px solid rgba(255,255,255,0.1);
+            z-index: 11;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            transition: right 0.3s ease;
+            padding: 30px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal.active {
+            right: 0;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px; right: 20px;
+            background: none;
+            border: none;
+            color: #8b949e;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .modal-close:hover {
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pending Approvals</h1>
+        <div class="grid" id="card-container">
+            <!-- Cards will be injected here -->
+            <p style="text-align:center; width:100%; color:#8b949e;">Loading pending approvals...</p>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal-overlay"></div>
+    <div class="modal" id="modal">
+        <button class="modal-close" id="modal-close">&times;</button>
+        <div class="modal-title">Compliance Review</div>
+        <div id="modal-content" style="color:#c9d1d9; line-height:1.6;">
+            <!-- Modal content injected here -->
+        </div>
+    </div>
+
+    <script>
+        async function fetchPending() {
+            try {
+                const res = await fetch('/api/pending');
+                const data = await res.json();
+                renderCards(data.pending || []);
+            } catch (err) {
+                document.getElementById('card-container').innerHTML = '<p style="color:#ff7b72;">Failed to load data.</p>';
+            }
+        }
+
+        function renderCards(pendingList) {
+            const container = document.getElementById('card-container');
+            if (pendingList.length === 0) {
+                container.innerHTML = '<p style="text-align:center; width:100%; color:#8b949e;">No pending approvals.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            pendingList.forEach(item => {
+                const payload = item.payload.kwargs || item.payload || {};
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        ${payload.submitter || 'Unknown'}
+                        <div class="amount">$${payload.amount || '0.00'}</div>
+                    </div>
+                    <div class="detail">Date: <span>${payload.date || 'N/A'}</span></div>
+                    <div class="detail">Category: <span>${payload.category || 'N/A'}</span></div>
+                    <div class="detail">Description: <span>${payload.description || 'N/A'}</span></div>
+                    
+                    <div class="actions">
+                        <button class="btn-approve" onclick="handleAction(this, '${item.session_id}', '${item.interrupt_id}', true)">
+                            <div class="spinner"></div><span>Approve</span>
+                        </button>
+                        <button class="btn-reject" onclick="handleAction(this, '${item.session_id}', '${item.interrupt_id}', false)">
+                            <div class="spinner"></div><span>Reject</span>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function handleAction(btn, sessionId, interruptId, approved) {
+            btn.classList.add('loading');
+            try {
+                await fetch('/api/action/' + sessionId, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interrupt_id: interruptId, approved })
+                });
+                // Remove card on success
+                btn.closest('.card').remove();
+                
+                // Check if empty
+                const container = document.getElementById('card-container');
+                if (container.children.length === 0) {
+                    container.innerHTML = '<p style="text-align:center; width:100%; color:#8b949e;">No pending approvals.</p>';
+                }
+            } catch (err) {
+                alert("Failed to process action.");
+                btn.classList.remove('loading');
+            }
+        }
+
+        // Modal logic (currently just visual, you could inject compliance info if fetched)
+        document.getElementById('modal-close').addEventListener('click', () => {
+            document.getElementById('modal').classList.remove('active');
+            document.getElementById('modal-overlay').classList.remove('active');
+        });
+        document.getElementById('modal-overlay').addEventListener('click', () => {
+            document.getElementById('modal').classList.remove('active');
+            document.getElementById('modal-overlay').classList.remove('active');
+        });
+
+        fetchPending();
+    </script>
+</body>
+</html>

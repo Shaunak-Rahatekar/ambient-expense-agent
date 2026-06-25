@@ -11,7 +11,6 @@ from google.adk.agents.context import Context
 
 from .config import EXPENSE_THRESHOLD, LLM_MODEL
 from .schema import ExpenseReport, RiskAssessment, ApprovalOutcome, SecurityAssessment
-
 @node
 def parse_event(node_input: Any) -> ExpenseReport:
     """Parses an incoming event containing an expense report."""
@@ -121,9 +120,25 @@ def human_review(ctx: Context, node_input: RiskAssessment):
     """Pauses for human approval based on the LLM's risk assessment."""
     # If we haven't received human input yet, yield a RequestInput to pause the workflow
     if not ctx.resume_inputs:
+        cleaned = ctx.state.get("cleaned_report", {})
+        expense_id = cleaned.get("id", "N/A")
+        amount = cleaned.get("amount", 0.0)
+        employee_name = cleaned.get("employee_name", cleaned.get("submitter", "Unknown"))
+        if not employee_name:
+            employee_name = cleaned.get("submitter", "Unknown")
+        merchant = cleaned.get("merchant", cleaned.get("description", "Unknown"))
+        if not merchant:
+            merchant = cleaned.get("description", "Unknown")
+
         yield RequestInput(
             interrupt_id="human_approval", 
-            message=f"Risk assessment alert! Is risky: {node_input.is_risky}.\nFactors: {node_input.risk_factors}\nSummary: {node_input.summary}\nApprove or reject?"
+            message=f"Risk assessment alert! Is risky: {node_input.is_risky}.\nFactors: {node_input.risk_factors}\nSummary: {node_input.summary}\nApprove or reject?",
+            payload={
+                "id": expense_id,
+                "amount": amount,
+                "employee_name": employee_name,
+                "merchant": merchant
+            }
         )
         return
     

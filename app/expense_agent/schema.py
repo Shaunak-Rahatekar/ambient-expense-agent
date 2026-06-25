@@ -1,13 +1,18 @@
 from pydantic import BaseModel
 from typing import Optional, Any
+from google.adk.events.request_input import RequestInput
 
 class ExpenseReport(BaseModel):
+    id: str = "N/A"
     amount: float
     submitter: str
-    category: str
+    employee_name: str = ""
+    merchant: str = ""
+    category: str = ""
     description: str
     date: str
     redacted_categories: list[str] = []
+
 
 class SecurityAssessment(BaseModel):
     is_injected: bool

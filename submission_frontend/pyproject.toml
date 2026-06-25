@@ -1,0 +1,10 @@
+[project]
+name = "submission_frontend"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "google-adk",
+    "google-cloud-aiplatform",
+    "jinja2"
+]

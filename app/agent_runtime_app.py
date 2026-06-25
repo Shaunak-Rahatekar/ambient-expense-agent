@@ -72,11 +72,12 @@ class AgentEngineApp(AdkApp):
                 resolved_message = None
 
         try:
+            if resume_inputs:
+                kwargs["resume_inputs"] = resume_inputs
             events = list(self.stream_query(
                 message=resolved_message,
                 user_id=resolved_user_id,
                 session_id=session_id, 
-                resume_inputs=resume_inputs, 
                 **kwargs
             ))
             return events
@@ -107,6 +108,7 @@ class AgentEngineApp(AdkApp):
                 json.loads(resolved_message)
             except json.JSONDecodeError:
                 # Ensure runner is initialized so we can access the session service
+                # Ensure runner is initialized so we can access the session service
                 if not self._tmpl_attrs.get("runner"):
                     self.set_up()
                 
@@ -117,6 +119,21 @@ class AgentEngineApp(AdkApp):
                         user_id=resolved_user_id,
                         session_id=session_id,
                     )
+                    
+                    # Fallback to other common user IDs used by Vertex AI Playground and SDKs
+                    # if the session was not found under the resolved user ID.
+                    if not session:
+                        for fallback_uid in ["vais-query-reasoning-engine", "default-user", "playground-user"]:
+                            if fallback_uid == resolved_user_id:
+                                continue
+                            session = await session_service.get_session(
+                                app_name=self._app_name,
+                                user_id=fallback_uid,
+                                session_id=session_id,
+                            )
+                            if session:
+                                break
+                                
                     if session and session.events:
                         # Find the last adk_request_input function call in session events
                         for event in reversed(session.events):
