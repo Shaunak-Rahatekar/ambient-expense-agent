@@ -42,15 +42,25 @@ To test the agent on your local machine with an interactive chat UI:
 
 ## How to Run on Cloud
 
-The agent is deployed serverlessly to **Vertex AI Agent Runtime** (Reasoning Engine). Because the workflow involves pausing for Human-in-the-Loop, the best way to interact with the live cloud deployment is via the Google Cloud Console Playground.
+The core agent is deployed serverlessly to **Vertex AI Agent Runtime** (Reasoning Engine), and we've deployed a custom **Cloud Run Dashboard** to handle the Human-in-the-Loop (HITL) review process!
 
-1. **[Open the Cloud Console Playground](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-east1/agent-engines/1395658487647698944/playground?project=ambient-expense-agent-500111)**
-2. Submit an expense payload in JSON format:
-   ```json
-   {"amount": 5000, "description": "Client dinner", "date": "2026-06-04", "submitter": "Alice", "category": "Meals"}
+### Option 1: Use the Custom Dashboard (Recommended for production)
+1. **Submit an Expense:** You can submit an expense programmatically or use our local test script:
+   ```bash
+   uv run python test_cloud_agent.py
    ```
-3. The cloud agent will process the request and pause, waiting for human approval.
-4. In the chat box, type `approve` (or `reject`) and hit enter to resume the workflow.
+2. **Review Pending Expenses:** Navigate to the live **[Expense Manager Dashboard](https://expense-manager-dashboard-1042866970340.us-east1.run.app)**.
+3. **Approve/Reject:** Any risky expense will automatically appear here. Click `Approve` or `Reject` to send the `FunctionResponse` payload back to the agent and resume the workflow!
+
+### Option 2: Use the Vertex AI Playground (Recommended for debugging)
+Because the workflow involves pausing for Human-in-the-Loop, you can also interact with the live cloud deployment directly via the Google Cloud Console Playground.
+1. **[Open the Cloud Console Playground](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-east1/agent-engines/2994999305317646336/playground?project=ambient-expense-agent-500111)**
+2. Submit an expense payload in JSON format, or type it in plain text:
+   ```json
+   {"id": "EXP-101", "amount": 5000, "description": "Client dinner", "date": "2026-06-25", "submitter": "Alice", "employee_name": "Alice Smith", "merchant": "Steakhouse", "category": "Meals"}
+   ```
+3. The cloud agent will process the request and pause, asking for human approval.
+4. In the chat box, type `approve` (or `reject`) and hit enter. The wrapper will automatically format this into the required `FunctionResponse` and resume the workflow.
 
 ## Deployment & CI/CD
 
@@ -61,6 +71,11 @@ This project uses Terraform for infrastructure and GitHub Actions for CI/CD.
 To deploy manually from the CLI:
 ```bash
 agents-cli deploy
+```
+
+The custom frontend is deployed via Cloud Run:
+```bash
+gcloud run deploy expense-manager-dashboard --source submission_frontend --region us-east1 --allow-unauthenticated --set-env-vars GOOGLE_CLOUD_PROJECT=ambient-expense-agent-500111,AGENT_RUNTIME_ID=projects/1042866970340/locations/us-east1/reasoningEngines/2994999305317646336
 ```
 
 ## Observability
